@@ -1,0 +1,78 @@
+package vn.ghtk.ewallet.commonlib.util;
+
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.binary.Base64;
+
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+
+
+//        openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
+//        openssl x509 -inform PEM -in certificate.pem -outform DER -out certificate.cer
+//        openssl x509 -inform der -in 00900.cer -pubkey -noout > certificate_publickey.pem
+@Slf4j
+public class RsaUtil {
+
+    private RsaUtil() {
+    }
+
+    public static boolean isValidSign(String key, String sign, String content) {
+        try {
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initVerify(getPublicKey(key));
+            signature.update(content.getBytes(StandardCharsets.UTF_8));
+            return signature.verify(Base64.decodeBase64(sign.getBytes()));
+        } catch (Exception ex) {
+            log.error("error verify", ex);
+            return false;
+        }
+    }
+
+    private static RSAPublicKey getPublicKey(String publickeyStr) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        publickeyStr = publickeyStr.replace("\\n", "").replace("-----BEGIN PUBLIC KEY-----", "").replace("-----END PUBLIC KEY-----", "");
+        X509EncodedKeySpec keySpecX509 = new X509EncodedKeySpec(Base64.decodeBase64(publickeyStr));
+
+        RSAPublicKey pubKey = (RSAPublicKey) kf.generatePublic(keySpecX509);
+        return pubKey;
+    }
+
+    public static String signSHA512(String key, String content) throws NoSuchAlgorithmException, InvalidKeySpecException,
+            SignatureException, InvalidKeyException {
+        Signature rsa = Signature.getInstance("SHA512withRSA");
+        rsa.initSign(getPrivateKey(key));
+        rsa.update(content.getBytes());
+        return Base64.encodeBase64String(rsa.sign());
+    }
+
+    public static String sign(String key, String content) throws NoSuchAlgorithmException, InvalidKeySpecException,
+            SignatureException, InvalidKeyException {
+        Signature rsa = Signature.getInstance("SHA256withRSA");
+        rsa.initSign(getPrivateKey(key));
+        rsa.update(content.getBytes(StandardCharsets.UTF_8));
+        return Base64.encodeBase64String(rsa.sign());
+    }
+
+    private static PrivateKey getPrivateKey(String privateKeyContent) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        String tmpk = privateKeyContent.replace("\\n", "").replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----", "");
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PKCS8EncodedKeySpec keySpecPKCS8 = new PKCS8EncodedKeySpec(Base64.decodeBase64(tmpk));
+        PrivateKey privKey = kf.generatePrivate(keySpecPKCS8);
+        return privKey;
+    }
+
+    public static void genkey() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(2048);
+        KeyPair pair = keyGen.generateKeyPair();
+        PrivateKey privateKey = pair.getPrivate();
+        PublicKey publicKey = pair.getPublic();
+        log.info("pub:  " + Base64.encodeBase64String(publicKey.getEncoded()));
+        log.info("priv:  " + Base64.encodeBase64String(privateKey.getEncoded()));
+    }
+}
